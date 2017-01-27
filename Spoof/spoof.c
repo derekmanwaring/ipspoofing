@@ -5,10 +5,12 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <linux/if_packet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/ip_icmp.h>
+#include <net/ethernet.h>
 
 #include <unistd.h>
 
@@ -36,12 +38,12 @@ ssize_t create_ip_packet(char * buffer,
     iph->ihl = 5;
     iph->version = 4;
     iph->tos = 0;
-    iph->tot_len = 0; // seems to be overwritten by kernel
+    iph->tot_len = htons(total_length); // seems to be overwritten by kernel
     iph->id = 0;
     iph->frag_off = 0;
     iph->ttl = 255;
     iph->protocol = protocol;
-    iph->check = 0; // seems to be overwritten by kernel
+    iph->check = 0; // seems to be overwritten by kernel - not with packet sockets. TODO: actually calculate it
     iph->saddr = inet_addr(source_address);
     iph->daddr = inet_addr(dest_address);
 
@@ -134,6 +136,107 @@ int spoof_generic(int argc, char **argv) {
             payload, payload_length, protocol);
 }
 
+int mac_string_to_addr(const const char* mac_addr_string,
+        uint8_t *mac_addr,
+        size_t mac_addr_capacity) {
+    int octets_read;
+    if (mac_addr_capacity < ETH_ALEN) {
+        printf("Insufficient capacity %zu for %u octets of mac address",
+                mac_addr_capacity, ETH_ALEN);
+        return -1;
+    }
+
+    octets_read = sscanf(mac_addr_string,
+            "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+            &mac_addr[0], &mac_addr[1], &mac_addr[2],
+            &mac_addr[3], &mac_addr[4], &mac_addr[5]);
+
+    if (octets_read < 0) {
+        perror("Error reading address");
+        return -1;
+    } else if (octets_read < ETH_ALEN) {
+        printf("Bad address %s\n", mac_addr_string);
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+int spoof_frame(int argc, char **argv) {
+    const const char* source_mac_address = argv[1];
+    const const char* source_ip_address = argv[2];
+    const const char* dest_mac_address = argv[3];
+    const const char* dest_ip_address = argv[4];
+    const const void* payload = argv[5];
+    size_t payload_length = strlen(payload);
+
+    char frame[1514];
+    char *frame_data;
+    struct ethhdr *eth_h;
+    struct sockaddr_ll device_send_address;
+    int socket_desc;
+    size_t frame_capacity = sizeof(frame);
+    size_t frame_length;
+    size_t header_length;
+    ssize_t ip_datagram_length;
+    int retv;
+
+    memset(frame, 0, frame_capacity);
+    memset(&device_send_address, 0, sizeof(device_send_address));
+    eth_h = (struct ethhdr *) frame;
+
+    // parse source and dest mac address
+    eth_h->h_proto = htons(ETH_P_IP);
+    retv = mac_string_to_addr(source_mac_address, eth_h->h_source, sizeof(eth_h->h_source));
+    if (retv != 0) {
+        printf("Error converting address\n");
+        return -1;
+    }
+    retv = mac_string_to_addr(dest_mac_address, eth_h->h_dest, sizeof(eth_h->h_dest));
+    if (retv != 0) {
+        printf("Error converting address\n");
+        return -1;
+    }
+
+    header_length = sizeof(struct ethhdr);
+    frame_data = frame + header_length;
+    ip_datagram_length = create_ip_packet(frame_data, frame_capacity - header_length,
+            source_ip_address, dest_ip_address,
+            payload, payload_length, IPPROTO_IP);
+    if (ip_datagram_length < 0) {
+        printf("Error creating ip datagram\n");
+        return -1;
+    }
+    frame_length = header_length + ip_datagram_length;
+
+    socket_desc = socket(AF_PACKET, SOCK_RAW, ETH_P_IP);
+    if (socket_desc < 0) {
+        perror("Error creating socket");
+        return -1;
+    }
+
+    device_send_address.sll_family = AF_PACKET;
+    memcpy(device_send_address.sll_addr, eth_h->h_dest, ETH_ALEN);
+    device_send_address.sll_halen = ETH_ALEN;
+    device_send_address.sll_ifindex = 2;
+    device_send_address.sll_protocol = ETH_P_IP;
+    retv = sendto(socket_desc, frame, frame_length, 0,
+            (struct sockaddr *) &device_send_address, sizeof (device_send_address));
+    if (retv != frame_length) {
+        perror("Couldn't send all data");
+        return -1;
+    }
+
+    // cleanup
+    retv = close(socket_desc);
+    if (retv != 0) {
+        perror("Error closing socket");
+        return -1;
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv) {
-    return spoof_icmp(argc, argv);
+    return spoof_frame(argc, argv);
 }
