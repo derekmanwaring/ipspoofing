@@ -42,19 +42,18 @@ int send_ip_datagram(const const char* source_address,
     }
 
     // set destination address and ip header
-    ip_datagram_length = sizeof (struct iphdr) + payload_length;
     destination.sin_family = AF_INET;
     destination.sin_addr.s_addr = inet_addr(dest_address);
     iph = (struct iphdr *) datagram;
     iph->ihl = 5;
     iph->version = 4;
     iph->tos = 0;
-    iph->tot_len = htons(ip_datagram_length);
+    iph->tot_len = 0; // seems to be overwritten by kernel
     iph->id = 0;
     iph->frag_off = 0;
     iph->ttl = 255;
     iph->protocol = protocol;
-    iph->check = 0;
+    iph->check = 0; // seems to be overwritten by kernel
     iph->saddr = inet_addr(source_address);
     iph->daddr = destination.sin_addr.s_addr;
 
@@ -62,7 +61,8 @@ int send_ip_datagram(const const char* source_address,
     memcpy(datagram + sizeof(struct iphdr), payload, payload_length);
 
     // send the datagram
-    retv = sendto(socket_desc, datagram, ip_datagram_length, 0,
+    retv = sendto(socket_desc, datagram,
+            sizeof (struct iphdr) + payload_length, 0,
             (struct sockaddr *) &destination, sizeof (destination));
     if (retv != ip_datagram_length) {
         perror("Couldn't send all data");
