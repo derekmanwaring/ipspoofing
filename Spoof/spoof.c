@@ -80,13 +80,17 @@ int send_ip_datagram(const const char* source_address,
 
 }
 
-int main(int argc, char **argv) {
+int spoof_generic(int argc, char **argv) {
     const const char* source_address = argv[1];
     const const char* dest_address = argv[2];
-    const const void* payload = "payload";
+    const const void* payload = argv[3];
     size_t payload_length = strlen(payload);
     uint8_t protocol = IPPROTO_IP;
 
     return send_ip_datagram(source_address, dest_address,
             payload, payload_length, protocol);
+}
+
+int main(int argc, char **argv) {
+    return spoof_icmp(argc, argv);
 }
