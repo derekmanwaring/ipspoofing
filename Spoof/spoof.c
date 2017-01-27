@@ -88,9 +88,9 @@ int spoof_icmp(int argc, char **argv) {
     struct icmphdr icmph;
     icmph.type = ICMP_ECHO;
     icmph.code = 0;
-    icmph.checksum = htons(0xf7ff);
-    icmph.un.echo.id = 0;
-    icmph.un.echo.sequence = 0;
+    icmph.checksum = htons(0xf1d2);
+    icmph.un.echo.id = htons(1580);
+    icmph.un.echo.sequence = htons(1);
 
     return send_ip_datagram(source_address, dest_address,
             &icmph, sizeof(icmph), IPPROTO_ICMP);
