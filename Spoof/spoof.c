@@ -61,8 +61,8 @@ int send_ip_datagram(const const char* source_address,
     memcpy(datagram + sizeof(struct iphdr), payload, payload_length);
 
     // send the datagram
-    retv = sendto(socket_desc, datagram,
-            sizeof (struct iphdr) + payload_length, 0,
+    ip_datagram_length = sizeof (struct iphdr) + payload_length;
+    retv = sendto(socket_desc, datagram, ip_datagram_length, 0,
             (struct sockaddr *) &destination, sizeof (destination));
     if (retv != ip_datagram_length) {
         perror("Couldn't send all data");
