@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <netinet/ip_icmp.h>
 
 #include <unistd.h>
 
@@ -78,6 +79,21 @@ int send_ip_datagram(const const char* source_address,
 
     return 0;
 
+}
+
+int spoof_icmp(int argc, char **argv) {
+    const const char* source_address = argv[1];
+    const const char* dest_address = argv[2];
+
+    struct icmphdr icmph;
+    icmph.type = ICMP_ECHO;
+    icmph.code = 0;
+    icmph.checksum = htons(0xf7ff);
+    icmph.un.echo.id = 0;
+    icmph.un.echo.sequence = 0;
+
+    return send_ip_datagram(source_address, dest_address,
+            &icmph, sizeof(icmph), IPPROTO_ICMP);
 }
 
 int spoof_generic(int argc, char **argv) {
