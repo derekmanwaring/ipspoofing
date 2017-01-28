@@ -184,6 +184,7 @@ int spoof_frame(int argc, char **argv) {
     memset(frame, 0, frame_capacity);
     memset(&device_send_address, 0, sizeof(device_send_address));
     eth_h = (struct ethhdr *) frame;
+    header_length = sizeof(struct ethhdr);
 
     // parse source and dest mac address
     eth_h->h_proto = htons(ETH_P_IP);
@@ -198,7 +199,7 @@ int spoof_frame(int argc, char **argv) {
         return -1;
     }
 
-    header_length = sizeof(struct ethhdr);
+    // add ip datagram to frame
     frame_data = frame + header_length;
     ip_datagram_length = create_ip_packet(frame_data, frame_capacity - header_length,
             source_ip_address, dest_ip_address,
