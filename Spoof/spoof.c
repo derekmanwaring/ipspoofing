@@ -237,7 +237,3 @@ int spoof_frame(int argc, char **argv) {
 
     return 0;
 }
-
-int main(int argc, char **argv) {
-    return spoof_frame(argc, argv);
-}
