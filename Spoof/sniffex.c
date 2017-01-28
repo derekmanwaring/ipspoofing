@@ -206,6 +206,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/ip_icmp.h>
+
+#include "spoof.h"
 
 /* default snap length (maximum bytes per packet to capture) */
 #define SNAP_LEN 1518
@@ -444,10 +447,19 @@ got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 		return;
 	}
 
+    char ip_src[16];
+    char ip_dst[16];
+    strncpy(ip_src, inet_ntoa(ip->ip_src), sizeof(ip_src));
+    strncpy(ip_dst, inet_ntoa(ip->ip_dst), sizeof(ip_dst));
+
 	/* print source and destination IP addresses */
-	printf("       From: %s\n", inet_ntoa(ip->ip_src));
-	printf("         To: %s\n", inet_ntoa(ip->ip_dst));
+	printf("       From: %s\n", ip_src);
+	printf("         To: %s\n", ip_dst);
 	
+    struct icmphdr echo_reply;
+    struct icmphdr* icmph;
+    int retv;
+
 	/* determine protocol */	
 	switch(ip->ip_p) {
 		case IPPROTO_TCP:
@@ -458,6 +470,25 @@ got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 			return;
 		case IPPROTO_ICMP:
 			printf("   Protocol: ICMP\n");
+
+            icmph = (struct icmphdr*) (packet + SIZE_ETHERNET + size_ip);
+            if (icmph->type == ICMP_ECHO) {
+                printf("   This was an echo request. Sending response...\n");
+
+                echo_reply.type = ICMP_ECHOREPLY;
+                echo_reply.code = 0;
+                echo_reply.checksum = htons(0xffff);
+                echo_reply.un.echo.id = icmph->un.echo.id;
+                echo_reply.un.echo.sequence = icmph->un.echo.sequence;
+
+                retv = send_ip_datagram(ip_dst, ip_src,
+                        &echo_reply, sizeof(echo_reply), IPPROTO_ICMP);
+
+                if (retv != 0) {
+                    printf("Error sending ICMP response");
+                }
+            }
+
 			return;
 		case IPPROTO_IP:
 			printf("   Protocol: IP\n");
@@ -507,7 +538,7 @@ int main(int argc, char **argv)
 	char errbuf[PCAP_ERRBUF_SIZE];		/* error buffer */
 	pcap_t *handle;				/* packet capture handle */
 
-	char filter_exp[] = "ip";		/* filter expression [3] */
+	char filter_exp[] = "icmp";
 	struct bpf_program fp;			/* compiled filter program (expression) */
 	bpf_u_int32 mask;			/* subnet mask */
 	bpf_u_int32 net;			/* ip */
